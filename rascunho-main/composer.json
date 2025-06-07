@@ -1,0 +1,19 @@
+{
+    "name": "seu-usuario/sistema-vagas",
+    "description": "API RESTful em PHP puro para gerenciamento de vagas e candidaturas.",
+    "type": "project",
+    "require": {},
+    "autoload": {
+      "psr-4": {
+        "App\\": "model/"
+      }
+    },
+    "license": "MIT",
+    "authors": [
+      {
+        "name": "Seu Nome",
+        "email": "seu.email@example.com"
+      }
+    ]
+  }
+  
