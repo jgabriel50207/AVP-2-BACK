@@ -1,50 +1,51 @@
 <?php
-header('Content-Type: application/json');
+declare(strict_types=1);
 
-require_once '../utils/validators.php';
-require_once '../model/Vaga.php';
+header("Content-Type: application/json; charset=UTF-8");
+// Outros headers...
 
-try {
-    $vagaModel = new Vaga();
-} catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Erro ao conectar ao banco de dados']);
-    exit;
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../model/Vaga.php';
+require_once __DIR__ . '/../utils/validators.php';
+
+function enviarResposta($statusCode, $data) {
+    http_response_code($statusCode);
+    echo json_encode($data);
+    exit();
 }
 
-$input = file_get_contents('php://input');
-$data = json_decode($input, true);
+$method = $_SERVER['REQUEST_METHOD'];
 
-if (json_last_error() !== JSON_ERROR_NONE) {
-    http_response_code(400);
-    exit;
-}
+if ($method === 'POST') {
+    $dados = json_decode(file_get_contents("php://input"), true);
 
-$requiredFields = ['id', 'empresa', 'titulo', 'localizacao', 'nivel'];
-foreach ($requiredFields as $field) {
-    if (!isset($data[$field]) || empty($data[$field])) {
-        http_response_code(422);
-        exit;
+    $requiredFields = ['id', 'empresa', 'titulo', 'localizacao', 'nivel'];
+    foreach ($requiredFields as $field) {
+        if (empty($dados[$field])) {
+            enviarResposta(422, ['mensagem' => "O campo '{$field}' é obrigatório."]);
+        }
     }
-}
 
-if (
-    !isValidUUID($data['id']) ||
-    !isValidLocalizacao($data['localizacao']) ||
-    !isValidNivel($data['nivel'])
-) {
-    http_response_code(422);
-    exit;
-}
-
-try {
-    $vagaModel->create($data);
-    http_response_code(201);
-} catch (PDOException $e) {
-    if ($e->errorInfo[1] == 1062) {
-        http_response_code(422);
-    } else {
-        http_response_code(500);
+    if (!isValidUUID($dados['id']) || !isValidLocalizacao($dados['localizacao']) || !isValidNivel($dados['nivel'])) {
+        enviarResposta(422, ['mensagem' => 'Dados de validação inválidos (UUID, Localização ou Nível).']);
     }
+    
+    try {
+        $vaga = new Vaga();
+        if ($vaga->exists($dados['id'])) {
+            enviarResposta(409, ['mensagem' => 'Já existe uma vaga com este ID.']);
+        }
+        
+        if ($vaga->create($dados)) {
+            enviarResposta(201, ['mensagem' => 'Vaga criada com sucesso.']);
+        } else {
+            enviarResposta(500, ['mensagem' => 'Não foi possível criar a vaga.']);
+        }
+    } catch (PDOException $e) {
+        error_log($e->getMessage());
+        enviarResposta(503, ['mensagem' => 'Serviço indisponível.']);
+    }
+
+} else {
+    enviarResposta(405, ['mensagem' => 'Método não permitido.']);
 }
-?>

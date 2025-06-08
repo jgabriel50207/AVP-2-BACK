@@ -1,21 +1,17 @@
 <?php
-// model/vaga.php
-
-require_once __DIR__ . '/../config/database.php';
+declare(strict_types=1);
 
 class Vaga {
-    private $db;
+    private PDO $db;
 
     public function __construct() {
-        $this->db = Database::conectar(); // Conexão correta e armazenada em $this->db
+        $this->db = Database::getInstance()->getConnection();
     }
 
-    public function create($data) {
-        $stmt = $this->db->prepare("
-            INSERT INTO vagas (id, empresa, titulo, descricao, localizacao, nivel)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([
+    public function create(array $data): bool {
+        $sql = "INSERT INTO vagas (id, empresa, titulo, descricao, localizacao, nivel) VALUES (?, ?, ?, ?, ?, ?)";
+        $stmt = $this->db->prepare($sql);
+        return $stmt->execute([
             $data['id'],
             $data['empresa'],
             $data['titulo'],
@@ -25,16 +21,18 @@ class Vaga {
         ]);
     }
 
-    public function exists($id) {
-        $stmt = $this->db->prepare("SELECT COUNT(*) FROM vagas WHERE id = ?");
+    public function exists(string $id): bool {
+        $sql = "SELECT COUNT(*) FROM vagas WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([$id]);
-        return $stmt->fetchColumn() > 0;
+        return (bool) $stmt->fetchColumn();
     }
-
-    public function get($id) {
-        $stmt = $this->db->prepare("SELECT * FROM vagas WHERE id = ?");
+    
+    public function get(string $id): ?array {
+        $sql = "SELECT * FROM vagas WHERE id = ?";
+        $stmt = $this->db->prepare($sql);
         $stmt->execute([$id]);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        $result = $stmt->fetch(); // PDO::FETCH_ASSOC é o padrão agora
+        return $result === false ? null : $result;
     }
 }
-?>
