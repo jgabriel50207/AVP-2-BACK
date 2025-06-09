@@ -2,17 +2,17 @@
 declare(strict_types=1);
 
 header("Content-Type: application/json; charset=UTF-8");
-// Outros headers...
 
 require_once __DIR__ . '/../config/database.php';
-require_once __DIR__ . '/../model/Pessoa.php';
-require_once __DIR__ . '/../model/Vaga.php';
-require_once __DIR__ . '/../model/Candidatura.php';
+require_once __DIR__ . '/../model/pessoa.php';
+require_once __DIR__ . '/../model/vaga.php';
+require_once __DIR__ . '/../model/candidatura.php';
 require_once __DIR__ . '/../utils/validators.php';
+require_once __DIR__ . '/../utils/scorecalculator.php';
 
-function enviarResposta($statusCode, $data) {
+function enviarResposta(int $statusCode): void 
+{
     http_response_code($statusCode);
-    echo json_encode($data);
     exit();
 }
 
@@ -21,15 +21,19 @@ $method = $_SERVER['REQUEST_METHOD'];
 if ($method === 'POST') {
     $dados = json_decode(file_get_contents("php://input"), true);
 
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        enviarResposta(400);
+    }
+
     $requiredFields = ['id', 'id_pessoa', 'id_vaga'];
     foreach ($requiredFields as $field) {
         if (empty($dados[$field])) {
-            enviarResposta(422, ['mensagem' => "O campo '{$field}' é obrigatório."]);
+            enviarResposta(422); 
         }
     }
 
     if (!isValidUUID($dados['id']) || !isValidUUID($dados['id_pessoa']) || !isValidUUID($dados['id_vaga'])) {
-        enviarResposta(422, ['mensagem' => 'Um ou mais IDs fornecidos não são UUIDs válidos.']);
+        enviarResposta(422);
     }
 
     try {
@@ -37,23 +41,45 @@ if ($method === 'POST') {
         $vagaModel = new Vaga();
         $candidaturaModel = new Candidatura();
 
-        if (!$pessoaModel->exists($dados['id_pessoa']) || !$vagaModel->exists($dados['id_vaga'])) {
-            enviarResposta(404, ['mensagem' => 'Pessoa ou Vaga informada não existe.']);
+        $vaga = $vagaModel->get($dados['id_vaga']);
+        $pessoa = $pessoaModel->get($dados['id_pessoa']);
+        
+        if (!$vaga || !$pessoa) {
+            enviarResposta(404);
+        }
+        
+        if ($candidaturaModel->exists($dados['id_pessoa'], $dados['id_vaga'])) {
+            enviarResposta(422); 
         }
 
-        if ($candidaturaModel->exists($dados['id_pessoa'], $dados['id_vaga'])) {
-            enviarResposta(409, ['mensagem' => 'Esta candidatura já foi registrada.']);
+        $calculadora = new ScoreCalculator();
+        $scoreFinal = $calculadora->calcularScore(
+            (int)$vaga['nivel'],
+            (int)$pessoa['nivel'],
+            $vaga['localizacao'],
+            $pessoa['localizacao']
+        );
+
+        if ($scoreFinal === null) {
+            http_response_code(500);
+            exit();
         }
+
+        $dados['score'] = $scoreFinal;
 
         if ($candidaturaModel->create($dados)) {
-            enviarResposta(201, ['mensagem' => 'Candidatura registrada com sucesso.']);
+            enviarResposta(201);
         } else {
-            enviarResposta(500, ['mensagem' => 'Não foi possível registrar a candidatura.']);
+            http_response_code(500);
+            exit();
         }
+
     } catch (PDOException $e) {
         error_log($e->getMessage());
-        enviarResposta(503, ['mensagem' => 'Serviço indisponível.']);
+        http_response_code(503);
+        exit();
     }
 } else {
-    enviarResposta(405, ['mensagem' => 'Método não permitido.']);
+    http_response_code(405);
+    exit();
 }

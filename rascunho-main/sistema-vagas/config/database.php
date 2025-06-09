@@ -5,10 +5,10 @@ class Database {
     private static ?self $instance = null;
     private PDO $connection;
 
-    private string  $host = 'localhost'; // ou seu host
-    private string $db_name = 'sistema_vagas';   // seu banco
-    private string $username = 'root';  // seu usuário
-    private string $password = ''; // sua senha
+    private string  $host = 'localhost'; // host
+    private string $db_name = 'sistema_vagas';   // sbanco
+    private string $username = 'root';  //  usuário
+    private string $password = ''; // senha
 
     private function __construct() {
         $dsn = "mysql:host={$this->host};dbname={$this->db_name};charset=utf8mb4";

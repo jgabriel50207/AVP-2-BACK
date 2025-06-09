@@ -1,53 +1,63 @@
 <?php
 declare(strict_types=1);
 
-// Headers para permitir o acesso e definir o tipo de conteúdo como JSON
+// Headers
 header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET");
 
-// Dependências
+
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../model/Candidatura.php';
+require_once __DIR__ . '/../model/Vaga.php'; // Adicionado
 require_once __DIR__ . '/../utils/validators.php';
 
-function enviarResposta(int $statusCode, array $data): void {
+function enviarRespostaComDados(int $statusCode, array $data): void {
     http_response_code($statusCode);
     echo json_encode($data);
     exit();
 }
 
 // Verifica se o método da requisição é GET
-$method = $_SERVER['REQUEST_METHOD'];
-if ($method !== 'GET') {
-    enviarResposta(405, ['mensagem' => 'Método não permitido. Utilize GET.']);
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    http_response_code(405); // Método não permitido
+    exit();
 }
 
 // 1. Validação da Entrada
-// Pega o id_vaga da URL (ex: ?id_vaga=...)
 $id_vaga = $_GET['id_vaga'] ?? null;
 
 if ($id_vaga === null) {
-    enviarResposta(400, ['mensagem' => 'O parâmetro id_vaga é obrigatório.']);
+    http_response_code(400); // Bad Request (faltou o parâmetro)
+    exit();
 }
 
 if (!isValidUUID($id_vaga)) {
-    enviarResposta(422, ['mensagem' => 'O id_vaga fornecido não é um UUID válido.']);
+    http_response_code(422); // Unprocessable Entity (formato inválido)
+    exit();
 }
 
 // 2. Lógica Principal
 try {
+    // --- NOVA VALIDAÇÃO: VERIFICA SE A VAGA EXISTE ---
+    $vagaModel = new Vaga();
+    if (!$vagaModel->exists($id_vaga)) {
+        // Se a vaga não for encontrada, retorna 404 sem corpo, conforme a regra.
+        http_response_code(404);
+        exit();
+    }
+    // ---------------------------------------------------
+
+    // Se a vaga existe, busca o ranking de candidatos.
     $candidaturaModel = new Candidatura();
-    
-    // Chama o novo método do model para buscar e ordenar os candidatos
     $ranking = $candidaturaModel->getRankingByVaga($id_vaga);
 
-    // 3. Envio da Resposta
-    // Retorna 200 OK com a lista de candidatos (pode ser uma lista vazia)
-    enviarResposta(200, $ranking);
+    // 3. Envio da Resposta de Sucesso
+    // Retorna 200 OK com a lista de candidatos (pode ser uma lista vazia se não houver candidatos)
+    enviarRespostaComDados(200, $ranking);
 
 } catch (PDOException $e) {
     // Em caso de erro de banco de dados
     error_log("Erro de BD no ranking: " . $e->getMessage());
-    enviarResposta(503, ['mensagem' => 'Serviço indisponível (erro no banco de dados).']);
+    http_response_code(503); // Service Unavailable
+    exit();
 }
